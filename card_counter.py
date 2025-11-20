@@ -1,107 +1,194 @@
 import re
-from typing import Dict
+from typing import Dict, List, Tuple, Optional
 
 class CardCounter:
-    SYMBOLS = ("♠️", "♥️", "♦️", "♣️", "♠", "♥", "♦", "♣")
-    _TOTAL = {s: 0 for s in ("♠️", "♥️", "♦️", "♣️")}
+    # Structure de données pour les paires : Compte + Liste des numéros de jeu
+    _PAIR_DATA: Dict[str, Dict[str, List[int] | int]] = {
+        "2/2": {"count": 0, "games": []},
+        "2/3": {"count": 0, "games": []},
+        "3/2": {"count": 0, "games": []},
+        "3/3": {"count": 0, "games": []}
+    }
 
-    def extract_first_group(self, text: str) -> str:
-        """Extrait UNIQUEMENT le 1er groupe entre parenthèses"""
+    def extract_groups(self, text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Extrait les deux premiers groupes entre parenthèses"""
         groups = re.findall(r"\(([^)]*)\)", text)
-        return groups[0] if len(groups) >= 1 else ""
+        return groups[0] if len(groups) >= 1 else None, groups[1] if len(groups) >= 2 else None
 
     def normalize(self, s: str) -> str:
         return s if s.endswith("️") else s + "️"
 
-    # ---- comptage : 1 par SYMBOLE unique (sans doublon) ----
-    def count_symbols(self, group: str) -> Dict[str, int]:
-        counts = {s: 0 for s in ("♠️", "♥️", "♦️", "♣️")}
-        
-        # Parcourir chaque symbole et compter UNE SEULE fois chaque occurrence
+    def count_symbols(self, group: str) -> int:
+        """Retourne le nombre total de cartes uniques dans un groupe."""
+        SYMBOLS = ("♠️", "♥️", "♦️", "♣️", "♠", "♥", "♦", "♣")
         seen_positions = set()
-        for sym in self.SYMBOLS:
-            normalized = self.normalize(sym)
-            # Chercher toutes les positions du symbole
+        unique_card_count = 0
+        
+        for sym in SYMBOLS:
             start = 0
             while True:
                 pos = group.find(sym, start)
                 if pos == -1:
                     break
-                # Vérifier si cette position n'a pas déjà été comptée
                 if pos not in seen_positions:
-                    counts[normalized] += 1
-                    seen_positions.add(pos)
-                start = pos + 1
+                    unique_card_count += 1
+                    for i in range(len(sym)):
+                        seen_positions.add(pos + i)
+                start = pos + len(sym)
         
-        return counts
+        return unique_card_count
 
-    def add(self, text: str) -> None:
-        """Compte les symboles du 1er groupe uniquement"""
-        first_group = self.extract_first_group(text)
-        if not first_group: return
-        counts = self.count_symbols(first_group)
-        for s, c in counts.items():
-            self._TOTAL[s] += c
+    def get_total_unique_cards(self, group: str) -> int:
+        """Alias pour le nombre total de cartes uniques."""
+        return self.count_symbols(group)
 
-    # ---- rapport SANS reset (instantané) ----
-    def build_report(self) -> str:
-        total = sum(self._TOTAL.values())
-        if total == 0:
-            return "📈 Compteur instantané\n♠️ : 0  (0.0 %)\n♥️ : 0  (0.0 %)\n♦️ : 0  (0.0 %)\n♣️ : 0  (0.0 %)"
-        
-        lines = ["📈 Compteur instantané"]
-        
-        for s in ("♠️", "♥️", "♦️", "♣️"):
-            count = self._TOTAL[s]
-            pct = count * 100 / total
-            lines.append(f"{s} : {count}  ({pct:.1f} %)")
-        
-        return "\n".join(lines)
+    def update_pair_counts(self, msg_text: str, game_number: Optional[int]):
+        """Met à jour le compteur des paires et stocke le numéro de jeu."""
+        group1, group2 = self.extract_groups(msg_text)
 
-    # ---- bilan + reset (intervalle) ----
-    def report_and_reset(self) -> str:
-        total = sum(self._TOTAL.values())
-        if total == 0:
-            self._TOTAL = {s: 0 for s in ("♠️", "♥️", "♦️", "♣️")}
-            return "╔════════════════════╗\n📊 Bilan 📊\n╚════════════════════╝\n\n🔍 Aucune carte comptabilisée"
+        if not group1 or not group2:
+            return
+
+        # 1. Compter les cartes uniques dans chaque groupe
+        count1 = self.get_total_unique_cards(group1)
+        count2 = self.get_total_unique_cards(group2)
+        
+        # 2. Vérifier si les comptes sont 2 ou 3
+        is_count1_valid = count1 in (2, 3)
+        is_count2_valid = count2 in (2, 3)
+        
+        if is_count1_valid and is_count2_valid:
+            # 3. Créer la clé de paire (ex: "2/3")
+            pair_key = f"{count1}/{count2}"
+            
+            # 4. Mettre à jour le compteur global et la liste des jeux
+            if pair_key in self._PAIR_DATA:
+                data = self._PAIR_DATA[pair_key]
+                data["count"] += 1
+                if game_number is not None:
+                    data["games"].append(game_number)
+
+    def reset_all(self):
+        """Réinitialise les compteurs de paires et les listes de jeux."""
+        self._PAIR_DATA = {
+            "2/2": {"count": 0, "games": []}, 
+            "2/3": {"count": 0, "games": []}, 
+            "3/2": {"count": 0, "games": []}, 
+            "3/3": {"count": 0, "games": []}
+        }
+        print("🔄 Compteurs de paires réinitialisés après bilan horaire.")
+
+    def get_instant_bilan_text(self) -> str:
+        """Génère le petit message instantané envoyé après chaque jeu."""
+        total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
         
         lines = [
+            "✨ **Instantané** | Stats Paires ✨",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"📈 Total jeux analysés : **{total_pairs}**",
+            ""
+        ]
+        
+        # Émojis simples pour l'instantané
+        emojis = {"2/2": "🃏", "3/3": "🔥", "3/2": "💪", "2/3": "🍀"}
+        pair_keys = ["2/2", "3/3", "3/2", "2/3"]
+        
+        for key in pair_keys:
+            count = self._PAIR_DATA[key]["count"]
+            pct = count * 100 / total_pairs if total_pairs > 0 else 0
+            lines.append(f"• **{key}** : **{count}** ({pct:.1f} %) {emojis.get(key, '')}")
+            
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        return "\n".join(lines)
+
+    def _get_pairs_bilan_text(self) -> str:
+        """Génère le Message 1 : Bilan Général des Paires (Décoré)."""
+        total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
+        
+        if total_pairs == 0:
+            return "Aucune donnée analysée pour le moment."
+
+        lines = [
             "╔════════════════════╗",
-            "📊 Bilan 📊",
+            "📊 Bilan Général des Paires",
             "╚════════════════════╝",
             ""
         ]
         
-        # Symboles avec émojis colorés
-        symbols_data = {
-            "♠️": {"name": "PIQUE", "emoji": "⬛", "color": "🖤"},
-            "♥️": {"name": "COEUR", "emoji": "🟥", "color": "❤️"},
-            "♦️": {"name": "CARREAU", "emoji": "🔶", "color": "🧡"},
-            "♣️": {"name": "TRÈFLE", "emoji": "🟩", "color": "💚"}
+        pair_data_style = {
+            "2/2": {"color": "🖤", "emoji": "⬛"},
+            "3/3": {"color": "❤️", "emoji": "🟥"},
+            "3/2": {"color": "🧡", "emoji": "🔶"},
+            "2/3": {"color": "💚", "emoji": "🟩"}
         }
         
-        for s in ("♠️", "♥️", "♦️", "♣️"):
-            count = self._TOTAL[s]
-            pct = count * 100 / total
-            data = symbols_data[s]
+        pair_keys = ["2/2", "3/3", "3/2", "2/3"]
+        
+        for key in pair_keys:
+            data = self._PAIR_DATA.get(key, {"count": 0})
+            count = data["count"]
+            pct = count * 100 / total_pairs if total_pairs > 0 else 0
+            style = pair_data_style[key]
             
-            # Barre de progression visuelle
             bar_length = int(pct / 10)
-            bar = data["emoji"] * bar_length + "⬜" * (10 - bar_length)
-            
-            lines.append(f"{data['color']} **{s} {data['name']}**")
-            lines.append(f"├─ Compteur: **{count}** carte{'s' if count > 1 else ''}")
+            bar = style["emoji"] * bar_length + "⬜" * (10 - bar_length)
+
+            lines.append(f"{style['color']} **{key}**")
+            lines.append(f"├─ Compteur: **{count}** numéros")
             lines.append(f"├─ Pourcentage: **{pct:.1f}%**")
             lines.append(f"└─ {bar}")
-            lines.append("")
-        
+            lines.append("") 
+
         lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"📌 Total: {total} carte{'s' if total > 1 else ''}")
+        lines.append(f"📌 Total: de numéro analysés : **{total_pairs}**")
         lines.append("━━━━━━━━━━━━━━━━━━━━")
-        
-        self._TOTAL = {s: 0 for s in ("♠️", "♥️", "♦️", "♣️")}
         return "\n".join(lines)
 
-    def reset(self) -> None:
-        self._TOTAL = {s: 0 for s in ("♠️", "♥️", "♦️", "♣️")}
+    def get_detailed_pair_bilans(self) -> Dict[str, str]:
+        """
+        Génère les 4 Messages (Bilans Particuliers) avec décoration et liste des numéros.
+        """
+        detailed_bilans = {}
+        pair_keys = ["2/2", "3/3", "3/2", "2/3"] 
         
+        pair_styles = {
+            "2/2": {"title": "L'Équilibre du Tapis", "deco": "♦️♣️🎲", "emoji": "🃏"},
+            "3/3": {"title": "Le Jackpot des Trois Cartes", "deco": "👑♠️♥️", "emoji": "🔥"},
+            "3/2": {"title": "La Main Forte du Joueur", "deco": "🎴🎯✨", "emoji": "💪"},
+            "2/3": {"title": "Le Tirage GAGNANT", "deco": "💫💰🎉", "emoji": "🍀"}
+        }
+        
+        for key in pair_keys:
+            data = self._PAIR_DATA.get(key, {"count": 0, "games": []})
+            games: List[int] = data["games"]
+            count: int = data["count"]
+            style = pair_styles[key]
+
+            if not games:
+                games_str = "Aucun jeu enregistré dans cette configuration. 🎲"
+            else:
+                games_with_prefix = [f"**#N{g}**" for g in games]
+                lines = []
+                for i in range(0, len(games_with_prefix), 10):
+                    lines.append(" ".join(games_with_prefix[i:i + 10]))
+                games_str = "\n".join(lines)
+            
+            bilan_text = [
+                f"┏━━━━━━ {style['deco']} **{style['title']}** ({key}) {style['deco']} ━━━━━━┓",
+                f"🎯 **Configuration**: {key} | Total des numéros: **{count}** {style['emoji']}",
+                f"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛",
+                "",
+                f"**🎰 La liste des numéros (Chronologique) :**",
+                "--------------------------------------------------",
+                games_str,
+                "--------------------------------------------------",
+                ""
+            ]
+            detailed_bilans[key] = "\n".join(bilan_text)
+
+        return detailed_bilans
+
+    def get_bilan_text(self) -> str:
+        """Retourne le Bilan Général (Message 1)."""
+        return self._get_pairs_bilan_text().strip()
+                
