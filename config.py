@@ -11,7 +11,7 @@ STAT_CHANNEL_ID = -1002682552255  # Canal source configuré
 
 # Canal d'affichage (où le bot envoie les compteurs et bilans)
 # Format: ID numérique du canal Telegram
-DISPLAY_CHANNEL_ID = -1002674389383  # Canal d'affichage configuré
+DISPLAY_CHANNEL_ID = -1003309666471  # Canal d'affichage configuré
 
 # ========== CONFIGURATION DU BOT ==========
 
