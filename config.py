@@ -20,8 +20,8 @@ DISPLAY_CHANNEL_ID = -1003309666471  # Canal d'affichage configuré
 AUTO_BILAN_INTERVAL = 60  # 60 minutes = bilans horaires
 
 # Port du serveur web (pour health checks)
-# Port 10000 pour Render.com, Port 8000 pour Replit
-DEFAULT_PORT = 10000
+# Port 8000 pour Replit, Port 10000 pour Render.com
+DEFAULT_PORT = 8000
 
 # ========== NOTES D'UTILISATION ==========
 

@@ -1,14 +1,14 @@
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 class CardCounter:
-    # Structure de données pour les paires : Compte + Liste des numéros de jeu
-    _PAIR_DATA: Dict[str, Dict[str, List[int] | int]] = {
-        "2/2": {"count": 0, "games": []},
-        "2/3": {"count": 0, "games": []},
-        "3/2": {"count": 0, "games": []},
-        "3/3": {"count": 0, "games": []}
-    }
+    def __init__(self):
+        self._PAIR_DATA: Dict[str, Dict[str, Any]] = {
+            "2/2": {"count": 0, "games": []},
+            "2/3": {"count": 0, "games": []},
+            "3/2": {"count": 0, "games": []},
+            "3/3": {"count": 0, "games": []}
+        }
 
     def extract_groups(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """Extrait les deux premiers groupes entre parenthèses"""
@@ -191,4 +191,34 @@ class CardCounter:
     def get_bilan_text(self) -> str:
         """Retourne le Bilan Général (Message 1)."""
         return self._get_pairs_bilan_text().strip()
+    
+    def add(self, text: str):
+        """Ajoute un message au compteur (extrait le numéro de jeu et compte les paires)."""
+        import re
+        game_number = None
+        match = re.search(r'#N(\d+)', text)
+        if match:
+            game_number = int(match.group(1))
+        self.update_pair_counts(text, game_number)
+    
+    def build_report(self) -> str:
+        """Construit un rapport instantané."""
+        return self.get_instant_bilan_text()
+    
+    def reset(self):
+        """Réinitialise tous les compteurs."""
+        self.reset_all()
+    
+    def report_and_reset(self) -> str:
+        """Génère un rapport complet et réinitialise les compteurs."""
+        general_bilan = self.get_bilan_text()
+        detailed_bilans = self.get_detailed_pair_bilans()
+        
+        all_messages = [general_bilan]
+        for key in ["2/2", "3/3", "3/2", "2/3"]:
+            if key in detailed_bilans:
+                all_messages.append(detailed_bilans[key])
+        
+        self.reset_all()
+        return "\n\n".join(all_messages)
                 

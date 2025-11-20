@@ -245,7 +245,7 @@ data/
 .DS_Store
 Thumbs.db
 """
-            z.writestr(".gitignore", gitcode)
+            z.writestr(".gitignore", gitignore)
 
             # README.md - Documentation complète
             readme = """# jou34 - Compteur de Cartes Telegram
@@ -435,7 +435,7 @@ async def dep_render(e):
             main_render_content = open("main.py", "r", encoding="utf-8").read()
             # Remplacer PORT = 8000 par PORT = 10000 pour Render.com
             main_render_content = main_render_content.replace(
-                "PORT     = int(os.getenv('PORT', 8000))",
+                "PORT     = int(os.getenv('PORT', 10000))",
                 "PORT     = int(os.getenv('PORT', 10000))"
             )
             z.writestr("main.py", main_render_content)

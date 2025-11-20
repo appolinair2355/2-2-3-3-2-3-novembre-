@@ -16,5 +16,3 @@ services:
         sync: false
       - key: ADMIN_ID
         sync: false
-      - key: DISPLAY_CHANNEL
-        sync: false
