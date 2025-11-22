@@ -91,7 +91,9 @@ class CardCounter:
         
         # Émojis simples pour l'instantané
         emojis = {"2/2": "🃏", "3/3": "🔥", "3/2": "💪", "2/3": "🍀"}
-        pair_keys = ["2/2", "3/3", "3/2", "2/3"]
+        
+        # MODIFICATION ICI : Changement de l'ordre d'affichage (3/2 en premier)
+        pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
             count = self._PAIR_DATA[key]["count"]
@@ -122,7 +124,8 @@ class CardCounter:
             "2/3": {"color": "💚", "emoji": "🟩"}
         }
         
-        pair_keys = ["2/2", "3/3", "3/2", "2/3"]
+        # MODIFICATION ICI : Changement de l'ordre d'affichage pour cohérence
+        pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
             data = self._PAIR_DATA.get(key, {"count": 0})
@@ -149,7 +152,9 @@ class CardCounter:
         Génère les 4 Messages (Bilans Particuliers) avec décoration et liste des numéros.
         """
         detailed_bilans = {}
-        pair_keys = ["2/2", "3/3", "3/2", "2/3"] 
+        
+        # MODIFICATION ICI : Changement de l'ordre d'affichage pour cohérence
+        pair_keys = ["3/2", "3/3", "2/2", "2/3"] 
         
         pair_styles = {
             "2/2": {"title": "L'Équilibre du Tapis", "deco": "♦️♣️🎲", "emoji": "🃏"},
@@ -215,10 +220,11 @@ class CardCounter:
         detailed_bilans = self.get_detailed_pair_bilans()
         
         all_messages = [general_bilan]
-        for key in ["2/2", "3/3", "3/2", "2/3"]:
+        # Ordre de génération du rapport final (aussi mis à jour)
+        for key in ["3/2", "3/3", "2/2", "2/3"]:
             if key in detailed_bilans:
                 all_messages.append(detailed_bilans[key])
         
         self.reset_all()
         return "\n\n".join(all_messages)
-                
+        
