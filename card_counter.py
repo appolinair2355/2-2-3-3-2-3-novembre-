@@ -16,28 +16,25 @@ class CardCounter:
         groups = re.findall(r"\(([^)]*)\)", text)
         return groups[0] if len(groups) >= 1 else None, groups[1] if len(groups) >= 2 else None
 
+    # La fonction 'normalize' n'est plus nécessaire avec la correction de 'count_symbols'
+
     def count_symbols(self, group: str) -> int:
-        """Retourne le nombre total de cartes uniques (symboles) dans un groupe."""
-        # Liste des symboles de cartes (y compris les variantes Unicode sans et avec variation sélecteur)
+        """
+        [CORRECTION BUG DE COMPTAGE]
+        Retourne le nombre total de cartes uniques dans un groupe en comptant les symboles.
+        C'est la méthode la plus robuste pour éviter les erreurs de déploiement.
+        """
         SYMBOLS = ("♠️", "♥️", "♦️", "♣️", "♠", "♥", "♦", "♣")
-        unique_card_count = 0
-        
-        # Simple comptage basé sur la présence des symboles.
-        # Note: Cela suppose que la chaîne de caractères est bien formatée (ex: 'A♠️ K♥️' et non 'A♠️K♥️').
-        for sym in SYMBOLS:
-            unique_card_count += group.count(sym)
-        
-        # Si le format des symboles est variable, il est plus sûr d'utiliser une expression régulière
-        # pour s'assurer que seules les combinaisons 'Valeur Symbole' sont comptées.
-        # Pour rester fidèle au code d'origine, on utilise count_symbols basé sur la recherche.
-        # La fonction originale était plus complexe pour gérer les positions; je simplifie ici:
-        # Si le jeu a 3 symboles, il y a 3 cartes.
         count = 0
-        for char in group.split():
-            # Estimation basée sur les symboles principaux utilisés
-            if any(s in char for s in SYMBOLS):
-                count += 1
-        return count if count in (2, 3) else 0 # Assure qu'on ne compte que 2 ou 3 cartes valides
+        
+        # Compte le nombre de symboles de carte dans le groupe
+        for sym in SYMBOLS:
+            count += group.count(sym)
+            
+        # Le jeu doit être soit 2 cartes, soit 3 cartes pour être valide
+        if count in (2, 3):
+            return count
+        return 0
 
     def get_total_unique_cards(self, group: str) -> int:
         """Alias pour le nombre total de cartes uniques."""
@@ -50,7 +47,7 @@ class CardCounter:
         if not group1 or not group2:
             return
 
-        # 1. Compter les cartes uniques dans chaque groupe (Joueur/Banquier)
+        # 1. Compter les cartes uniques dans chaque groupe
         count1 = self.get_total_unique_cards(group1)
         count2 = self.get_total_unique_cards(group2)
         
@@ -77,10 +74,10 @@ class CardCounter:
             "3/2": {"count": 0, "games": []}, 
             "3/3": {"count": 0, "games": []}
         }
-        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.") # Commenté pour éviter l'affichage lors du déploiement
+        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.") # Commenté
 
-    # --- FONCTIONS DE CALCUL DES K-COUNTS ---
-
+    # --- NOUVELLES FONCTIONS D'ANALYSE 3K/2K ---
+    
     def get_player_k_counts(self) -> Tuple[int, int]:
         """Calcule et retourne le total 3K et 2K basés sur le Joueur (le premier nombre dans X/Y)."""
         count_3k_joueur = self._PAIR_DATA["3/2"]["count"] + self._PAIR_DATA["3/3"]["count"]
@@ -89,17 +86,15 @@ class CardCounter:
     
     def get_banker_k_counts(self) -> Tuple[int, int]:
         """Calcule et retourne le total 3K et 2K basés sur le Banquier (le second nombre dans X/Y)."""
-        # 3K Banquier: paires où le banquier reçoit 3 cartes (X/3)
         count_3k_banker = self._PAIR_DATA["2/3"]["count"] + self._PAIR_DATA["3/3"]["count"]
-        # 2K Banquier: paires où le banquier reçoit 2 cartes (X/2)
         count_2k_banker = self._PAIR_DATA["2/2"]["count"] + self._PAIR_DATA["3/2"]["count"]
         return count_3k_banker, count_2k_banker
 
 
-    # --- FONCTION DE GÉNÉRATION DES RAPPORTS ---
+    # --- MISE À JOUR DU BILAN INSTANTANÉ (Message 1) ---
 
     def get_instant_bilan_text(self) -> str:
-        """Génère la SYNTHÈSE INSTANTANÉE (Joueur/Banquier/Paires) pour le rapport (Message 1)."""
+        """Génère la SYNTHÈSE INSTANTANÉE (Joueur/Banquier/Paires) pour le rapport."""
         total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
         
         if total_pairs == 0:
@@ -255,6 +250,7 @@ class CardCounter:
     
     def report_and_reset(self) -> str:
         """
+        [CORRECTION ORDRE D'ENVOI]
         Génère un rapport complet et réinitialise les compteurs.
         Ordre : 1. Synthèse (Joueur/Banquier), 2. Bilan Général, 3. Bilans Détaillés.
         """
@@ -283,3 +279,4 @@ class CardCounter:
         
         self.reset_all()
         return "\n\n".join(all_messages)
+        
