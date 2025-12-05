@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Optional, Any
 
 class CardCounter:
     def __init__(self):
+        # Initialisation des compteurs et des listes de jeux pour chaque paire
         self._PAIR_DATA: Dict[str, Dict[str, Any]] = {
             "2/2": {"count": 0, "games": []},
             "2/3": {"count": 0, "games": []},
@@ -15,28 +16,28 @@ class CardCounter:
         groups = re.findall(r"\(([^)]*)\)", text)
         return groups[0] if len(groups) >= 1 else None, groups[1] if len(groups) >= 2 else None
 
-    def normalize(self, s: str) -> str:
-        return s if s.endswith("️") else s + "️"
-
     def count_symbols(self, group: str) -> int:
-        """Retourne le nombre total de cartes uniques dans un groupe."""
+        """Retourne le nombre total de cartes uniques (symboles) dans un groupe."""
+        # Liste des symboles de cartes (y compris les variantes Unicode sans et avec variation sélecteur)
         SYMBOLS = ("♠️", "♥️", "♦️", "♣️", "♠", "♥", "♦", "♣")
-        seen_positions = set()
         unique_card_count = 0
         
+        # Simple comptage basé sur la présence des symboles.
+        # Note: Cela suppose que la chaîne de caractères est bien formatée (ex: 'A♠️ K♥️' et non 'A♠️K♥️').
         for sym in SYMBOLS:
-            start = 0
-            while True:
-                pos = group.find(sym, start)
-                if pos == -1:
-                    break
-                if pos not in seen_positions:
-                    unique_card_count += 1
-                    for i in range(len(sym)):
-                        seen_positions.add(pos + i)
-                start = pos + len(sym)
+            unique_card_count += group.count(sym)
         
-        return unique_card_count
+        # Si le format des symboles est variable, il est plus sûr d'utiliser une expression régulière
+        # pour s'assurer que seules les combinaisons 'Valeur Symbole' sont comptées.
+        # Pour rester fidèle au code d'origine, on utilise count_symbols basé sur la recherche.
+        # La fonction originale était plus complexe pour gérer les positions; je simplifie ici:
+        # Si le jeu a 3 symboles, il y a 3 cartes.
+        count = 0
+        for char in group.split():
+            # Estimation basée sur les symboles principaux utilisés
+            if any(s in char for s in SYMBOLS):
+                count += 1
+        return count if count in (2, 3) else 0 # Assure qu'on ne compte que 2 ou 3 cartes valides
 
     def get_total_unique_cards(self, group: str) -> int:
         """Alias pour le nombre total de cartes uniques."""
@@ -49,7 +50,7 @@ class CardCounter:
         if not group1 or not group2:
             return
 
-        # 1. Compter les cartes uniques dans chaque groupe
+        # 1. Compter les cartes uniques dans chaque groupe (Joueur/Banquier)
         count1 = self.get_total_unique_cards(group1)
         count2 = self.get_total_unique_cards(group2)
         
@@ -76,23 +77,63 @@ class CardCounter:
             "3/2": {"count": 0, "games": []}, 
             "3/3": {"count": 0, "games": []}
         }
-        print("🔄 Compteurs de paires réinitialisés après bilan horaire.")
+        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.") # Commenté pour éviter l'affichage lors du déploiement
+
+    # --- FONCTIONS DE CALCUL DES K-COUNTS ---
+
+    def get_player_k_counts(self) -> Tuple[int, int]:
+        """Calcule et retourne le total 3K et 2K basés sur le Joueur (le premier nombre dans X/Y)."""
+        count_3k_joueur = self._PAIR_DATA["3/2"]["count"] + self._PAIR_DATA["3/3"]["count"]
+        count_2k_joueur = self._PAIR_DATA["2/2"]["count"] + self._PAIR_DATA["2/3"]["count"]
+        return count_3k_joueur, count_2k_joueur
+    
+    def get_banker_k_counts(self) -> Tuple[int, int]:
+        """Calcule et retourne le total 3K et 2K basés sur le Banquier (le second nombre dans X/Y)."""
+        # 3K Banquier: paires où le banquier reçoit 3 cartes (X/3)
+        count_3k_banker = self._PAIR_DATA["2/3"]["count"] + self._PAIR_DATA["3/3"]["count"]
+        # 2K Banquier: paires où le banquier reçoit 2 cartes (X/2)
+        count_2k_banker = self._PAIR_DATA["2/2"]["count"] + self._PAIR_DATA["3/2"]["count"]
+        return count_3k_banker, count_2k_banker
+
+
+    # --- FONCTION DE GÉNÉRATION DES RAPPORTS ---
 
     def get_instant_bilan_text(self) -> str:
-        """Génère le petit message instantané envoyé après chaque jeu."""
+        """Génère la SYNTHÈSE INSTANTANÉE (Joueur/Banquier/Paires) pour le rapport (Message 1)."""
         total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
+        
+        if total_pairs == 0:
+            return "✨ **Instantané** | Stats Paires ✨\n━━━━━━━━━━━━━━━━━━━━\n📈 Total jeux analysés : **0**\n━━━━━━━━━━━━━━━━━━━━"
+
+        # Totaux Joueur
+        count_3k_joueur, count_2k_joueur = self.get_player_k_counts()
+        pct_3k_joueur = count_3k_joueur * 100 / total_pairs
+        pct_2k_joueur = count_2k_joueur * 100 / total_pairs
+        
+        # Totaux Banquier
+        count_3k_banker, count_2k_banker = self.get_banker_k_counts()
+        pct_3k_banker = count_3k_banker * 100 / total_pairs
+        pct_2k_banker = count_2k_banker * 100 / total_pairs
         
         lines = [
             "✨ **Instantané** | Stats Paires ✨",
             "━━━━━━━━━━━━━━━━━━━━",
             f"📈 Total jeux analysés : **{total_pairs}**",
-            ""
+            "",
+            "👤 **Analyse JOUEUR (X/Y)**",
+            f"• **3K** (3/2 + 3/3) : **{count_3k_joueur}** ({pct_3k_joueur:.1f} %)", 
+            f"• **2K** (2/2 + 2/3) : **{count_2k_joueur}** ({pct_2k_joueur:.1f} %)",
+            "",
+            "🏦 **Analyse BANQUIER (X/Y)**",
+            f"• **3K** (2/3 + 3/3) : **{count_3k_banker}** ({pct_3k_banker:.1f} %)",
+            f"• **2K** (2/2 + 3/2) : **{count_2k_banker}** ({pct_2k_banker:.1f} %)",
+            "",
+            "*** Détails des Paires ***",
+            "━━━━━━━━━━━━━━━━━━━━"
         ]
         
-        # Émojis simples pour l'instantané
+        # Détails par Paire
         emojis = {"2/2": "🃏", "3/3": "🔥", "3/2": "💪", "2/3": "🍀"}
-        
-        # MODIFICATION ICI : Changement de l'ordre d'affichage (3/2 en premier)
         pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
@@ -103,8 +144,9 @@ class CardCounter:
         lines.append("━━━━━━━━━━━━━━━━━━━━")
         return "\n".join(lines)
 
+
     def _get_pairs_bilan_text(self) -> str:
-        """Génère le Message 1 : Bilan Général des Paires (Décoré)."""
+        """Génère le Bilan Général des Paires (Décoré) (Message 2)."""
         total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
         
         if total_pairs == 0:
@@ -124,7 +166,6 @@ class CardCounter:
             "2/3": {"color": "💚", "emoji": "🟩"}
         }
         
-        # MODIFICATION ICI : Changement de l'ordre d'affichage pour cohérence
         pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
@@ -133,7 +174,7 @@ class CardCounter:
             pct = count * 100 / total_pairs if total_pairs > 0 else 0
             style = pair_data_style[key]
             
-            bar_length = int(pct / 10)
+            bar_length = int(pct / 10) # 10 icônes max
             bar = style["emoji"] * bar_length + "⬜" * (10 - bar_length)
 
             lines.append(f"{style['color']} **{key}**")
@@ -149,11 +190,9 @@ class CardCounter:
 
     def get_detailed_pair_bilans(self) -> Dict[str, str]:
         """
-        Génère les 4 Messages (Bilans Particuliers) avec décoration et liste des numéros.
+        Génère les Bilans Détaillés (Liste des numéros de jeu) (Messages 3, 4, 5, 6).
         """
         detailed_bilans = {}
-        
-        # MODIFICATION ICI : Changement de l'ordre d'affichage pour cohérence
         pair_keys = ["3/2", "3/3", "2/2", "2/3"] 
         
         pair_styles = {
@@ -174,6 +213,7 @@ class CardCounter:
             else:
                 games_with_prefix = [f"**#N{g}**" for g in games]
                 lines = []
+                # Affichage de 10 numéros par ligne pour la lisibilité
                 for i in range(0, len(games_with_prefix), 10):
                     lines.append(" ".join(games_with_prefix[i:i + 10]))
                 games_str = "\n".join(lines)
@@ -194,12 +234,11 @@ class CardCounter:
         return detailed_bilans
 
     def get_bilan_text(self) -> str:
-        """Retourne le Bilan Général (Message 1)."""
+        """Retourne le Bilan Général."""
         return self._get_pairs_bilan_text().strip()
     
     def add(self, text: str):
         """Ajoute un message au compteur (extrait le numéro de jeu et compte les paires)."""
-        import re
         game_number = None
         match = re.search(r'#N(\d+)', text)
         if match:
@@ -207,7 +246,7 @@ class CardCounter:
         self.update_pair_counts(text, game_number)
     
     def build_report(self) -> str:
-        """Construit un rapport instantané."""
+        """Construit un rapport instantané (synthèse rapide)."""
         return self.get_instant_bilan_text()
     
     def reset(self):
@@ -215,16 +254,32 @@ class CardCounter:
         self.reset_all()
     
     def report_and_reset(self) -> str:
-        """Génère un rapport complet et réinitialise les compteurs."""
+        """
+        Génère un rapport complet et réinitialise les compteurs.
+        Ordre : 1. Synthèse (Joueur/Banquier), 2. Bilan Général, 3. Bilans Détaillés.
+        """
+        # 1. Générer le rapport INSTANTANÉ/SYNTHÈSE (Joueur/Banquier)
+        instant_bilan = self.get_instant_bilan_text()
+        
+        # 2. Générer le Bilan Général (Décoré)
         general_bilan = self.get_bilan_text()
+        
+        # 3. Générer les Bilans Détaillés (Listes de jeux)
         detailed_bilans = self.get_detailed_pair_bilans()
         
-        all_messages = [general_bilan]
-        # Ordre de génération du rapport final (aussi mis à jour)
+        all_messages = []
+        
+        # --- ORDRE D'ENVOI FINAL (PRIORISATION) ---
+        # 1. Synthèse Joueur/Banquier/Paires
+        all_messages.append(instant_bilan)
+        
+        # 2. Bilan Général
+        all_messages.append(general_bilan)
+        
+        # 3. Bilans Détaillés par paire
         for key in ["3/2", "3/3", "2/2", "2/3"]:
             if key in detailed_bilans:
                 all_messages.append(detailed_bilans[key])
         
         self.reset_all()
         return "\n\n".join(all_messages)
-        
