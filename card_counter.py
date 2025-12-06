@@ -16,13 +16,10 @@ class CardCounter:
         groups = re.findall(r"\(([^)]*)\)", text)
         return groups[0] if len(groups) >= 1 else None, groups[1] if len(groups) >= 2 else None
 
-    # La fonction 'normalize' n'est plus nécessaire avec la correction de 'count_symbols'
-
     def count_symbols(self, group: str) -> int:
         """
-        [CORRECTION BUG DE COMPTAGE]
-        Retourne le nombre total de cartes uniques dans un groupe en comptant les symboles.
-        C'est la méthode la plus robuste pour éviter les erreurs de déploiement.
+        ✅ CORRECTION BUG DE COMPTAGE
+        Retourne le nombre total de cartes uniques dans un groupe en comptant les symboles de carte.
         """
         SYMBOLS = ("♠️", "♥️", "♦️", "♣️", "♠", "♥", "♦", "♣")
         count = 0
@@ -74,9 +71,9 @@ class CardCounter:
             "3/2": {"count": 0, "games": []}, 
             "3/3": {"count": 0, "games": []}
         }
-        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.") # Commenté
+        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.")
 
-    # --- NOUVELLES FONCTIONS D'ANALYSE 3K/2K ---
+    # --- FONCTIONS D'ANALYSE 3K/2K ---
     
     def get_player_k_counts(self) -> Tuple[int, int]:
         """Calcule et retourne le total 3K et 2K basés sur le Joueur (le premier nombre dans X/Y)."""
@@ -91,14 +88,14 @@ class CardCounter:
         return count_3k_banker, count_2k_banker
 
 
-    # --- MISE À JOUR DU BILAN INSTANTANÉ (Message 1) ---
+    # --- MISE À JOUR DU BILAN INSTANTANÉ (Message 1 - Prioritaire) ---
 
     def get_instant_bilan_text(self) -> str:
         """Génère la SYNTHÈSE INSTANTANÉE (Joueur/Banquier/Paires) pour le rapport."""
         total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
         
         if total_pairs == 0:
-            return "✨ **Instantané** | Stats Paires ✨\n━━━━━━━━━━━━━━━━━━━━\n📈 Total jeux analysés : **0**\n━━━━━━━━━━━━━━━━━━━━"
+            return "✨ **Instantané** | Stats Paires ✨\n━━━━━━━━━━━━━━━━━━━━\n📈 Total jeux analysés : **0**\n\nAucune donnée analysée pour le moment.\n━━━━━━━━━━━━━━━━━━━━"
 
         # Totaux Joueur
         count_3k_joueur, count_2k_joueur = self.get_player_k_counts()
@@ -250,14 +247,14 @@ class CardCounter:
     
     def report_and_reset(self) -> str:
         """
-        [CORRECTION ORDRE D'ENVOI]
+        [ORDRE D'ENVOI FINAL]
         Génère un rapport complet et réinitialise les compteurs.
         Ordre : 1. Synthèse (Joueur/Banquier), 2. Bilan Général, 3. Bilans Détaillés.
         """
-        # 1. Générer le rapport INSTANTANÉ/SYNTHÈSE (Joueur/Banquier)
+        # 1. Générer le rapport INSTANTANÉ/SYNTHÈSE (Joueur/Banquier) - Message 1
         instant_bilan = self.get_instant_bilan_text()
         
-        # 2. Générer le Bilan Général (Décoré)
+        # 2. Générer le Bilan Général (Décoré) - Message 2
         general_bilan = self.get_bilan_text()
         
         # 3. Générer les Bilans Détaillés (Listes de jeux)
@@ -265,18 +262,14 @@ class CardCounter:
         
         all_messages = []
         
-        # --- ORDRE D'ENVOI FINAL (PRIORISATION) ---
-        # 1. Synthèse Joueur/Banquier/Paires
+        # --- ORDRE D'ENVOI FINAL ---
         all_messages.append(instant_bilan)
-        
-        # 2. Bilan Général
         all_messages.append(general_bilan)
         
-        # 3. Bilans Détaillés par paire
+        # Bilans Détaillés par paire
         for key in ["3/2", "3/3", "2/2", "2/3"]:
             if key in detailed_bilans:
                 all_messages.append(detailed_bilans[key])
         
         self.reset_all()
         return "\n\n".join(all_messages)
-        
