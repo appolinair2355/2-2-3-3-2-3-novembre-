@@ -15,7 +15,7 @@ API_ID   = int(os.getenv("API_ID") or 0)
 API_HASH = os.getenv("API_HASH") or ""
 BOT_TOKEN= os.getenv("BOT_TOKEN") or ""
 ADMIN_ID = int(os.getenv("ADMIN_ID") or 0)
-PORT     = int(os.getenv('PORT', 10000))
+PORT     = int(os.getenv('PORT', 5000))
 
 # ---------- GLOBALS ----------
 # Utiliser la configuration pré-définie dans config.py
@@ -141,15 +141,6 @@ async def deploy(e):
     if e.sender_id != ADMIN_ID: return
     import zipfile
     zip_name = "joueu2.zip"
-
-    # Nettoyer tous les anciens fichiers ZIP
-    import glob
-    for old_zip in glob.glob("*.zip"):
-        try:
-            os.remove(old_zip)
-            print(f"🗑️ Ancien fichier supprimé: {old_zip}")
-        except:
-            pass
 
     try:
         with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as z:
@@ -415,10 +406,6 @@ Le bot doit être:
         await e.respond("📦 joueu2.zip créé avec succès!\n✅ Port 10000 Replit\n✅ Python 3.11.10\n✅ Compte le 1er groupe uniquement\n✅ Canal: -1002674389383\n✅ Tous fichiers optimisés")
         await client.send_file(e.chat_id, zip_name, caption="🚀 joueu2.zip - Déploiement complet (1er groupe)")
 
-        # Nettoyer le fichier ZIP après envoi
-        if os.path.exists(zip_name):
-            os.remove(zip_name)
-
     except Exception as ex:
         await e.respond(f"❌ Erreur: {ex}")
 
@@ -634,10 +621,6 @@ git push origin main
 
         await e.respond("📦 Package render10k.zip créé avec succès!\n✅ Python 3.11.10 + Port 10000\n✅ Optimisé pour Render.com\n🔧 Tous les fichiers corrigés et prêts au déploiement")
         await client.send_file(e.chat_id, zip_name, caption="🚀 render10k.zip - Render.com (Python 3.11 + Port 10000)")
-
-        # Nettoyer le fichier ZIP après envoi
-        if os.path.exists(zip_name):
-            os.remove(zip_name)
 
     except Exception as ex:
         await e.respond(f"❌ Erreur lors de la création du package: {ex}")

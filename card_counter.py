@@ -10,11 +10,45 @@ class CardCounter:
             "3/2": {"count": 0, "games": []},
             "3/3": {"count": 0, "games": []}
         }
+        
+        # Nouveau tracking: Victoires, Impair/Pair, Match nul
+        self._VICTORIES_DATA = {
+            "joueur": {"count": 0, "games": []},
+            "banquier": {"count": 0, "games": []},
+            "nul": {"count": 0, "games": []}
+        }
+        
+        self._ODD_EVEN_DATA = {
+            "odd": {"count": 0, "games": []},
+            "even": {"count": 0, "games": []}
+        }
 
     def extract_groups(self, text: str) -> Tuple[Optional[str], Optional[str]]:
         """Extrait les deux premiers groupes entre parenthèses"""
         groups = re.findall(r"\(([^)]*)\)", text)
         return groups[0] if len(groups) >= 1 else None, groups[1] if len(groups) >= 2 else None
+
+    def extract_game_number(self, text: str) -> Optional[int]:
+        """Extrait le numéro de jeu #N"""
+        match = re.search(r'#N(\d+)', text)
+        return int(match.group(1)) if match else None
+
+    def extract_t_number(self, text: str) -> Optional[int]:
+        """Extrait le numéro #T pour pair/impair"""
+        match = re.search(r'#T(\d+)', text)
+        return int(match.group(1)) if match else None
+
+    def extract_points(self, text: str) -> Tuple[Optional[int], Optional[int]]:
+        """Extrait les points Pg1 et Pg2 du format: #N1127. 1(A♠️3♠️7♣️) - ✅5(Q♠️5♦️J♦️)"""
+        # Pattern: #N\d+\. ... chiffre ( ... ) - chiffre (
+        # On cherche: un nombre avant une parenthèse, puis après le "-", un autre nombre avant une parenthèse
+        pattern = r'#N\d+\.\s*(\d+)\([^)]*\)\s*-\s*[✅🔰]?(\d+)\('
+        match = re.search(pattern, text)
+        if match:
+            pg1 = int(match.group(1))
+            pg2 = int(match.group(2))
+            return pg1, pg2
+        return None, None
 
     def count_symbols(self, group: str) -> int:
         """
@@ -64,6 +98,54 @@ class CardCounter:
                 if game_number is not None:
                     data["games"].append(game_number)
 
+    def update_victories(self, msg_text: str, game_number: Optional[int]):
+        """Analyse les victoires basées sur la position du checkmark (✅)"""
+        
+        # Match nul si 🔰 dans le message
+        if "🔰" in msg_text:
+            self._VICTORIES_DATA["nul"]["count"] += 1
+            if game_number is not None:
+                self._VICTORIES_DATA["nul"]["games"].append(game_number)
+            return
+
+        # Chercher la position du checkmark ✅
+        # Pattern: ✅ peut être avant le premier groupe (victoire Joueur) ou avant le second groupe (victoire Banquier)
+        # Exemple 1: #N151. 1(...) - ✅2(...) → Banquier a ✅ → Banquier gagne
+        # Exemple 2: #N153. ✅7(...) - 3(...) → Joueur a ✅ → Joueur gagne
+        
+        # Chercher si ✅ est avant le premier groupe (nombre avant la parenthèse)
+        pattern_joueur = r'#N\d+\.\s*✅\d+\('
+        # Chercher si ✅ est avant le second groupe (après le tiret)
+        pattern_banquier = r'-\s*✅\d+\('
+        
+        if re.search(pattern_joueur, msg_text):
+            # Victoire Joueur (✅ avant le premier groupe)
+            self._VICTORIES_DATA["joueur"]["count"] += 1
+            if game_number is not None:
+                self._VICTORIES_DATA["joueur"]["games"].append(game_number)
+        elif re.search(pattern_banquier, msg_text):
+            # Victoire Banquier (✅ avant le second groupe)
+            self._VICTORIES_DATA["banquier"]["count"] += 1
+            if game_number is not None:
+                self._VICTORIES_DATA["banquier"]["games"].append(game_number)
+
+    def update_odd_even(self, msg_text: str, game_number: Optional[int]):
+        """Analyse pair/impair basé sur le numéro #T"""
+        t_number = self.extract_t_number(msg_text)
+        if t_number is None:
+            return
+
+        if t_number % 2 == 0:
+            # Pair
+            self._ODD_EVEN_DATA["even"]["count"] += 1
+            if game_number is not None:
+                self._ODD_EVEN_DATA["even"]["games"].append(game_number)
+        else:
+            # Impair
+            self._ODD_EVEN_DATA["odd"]["count"] += 1
+            if game_number is not None:
+                self._ODD_EVEN_DATA["odd"]["games"].append(game_number)
+
     def reset_all(self):
         """Réinitialise les compteurs de paires et les listes de jeux."""
         self._PAIR_DATA = {
@@ -72,7 +154,15 @@ class CardCounter:
             "3/2": {"count": 0, "games": []}, 
             "3/3": {"count": 0, "games": []}
         }
-        # print("🔄 Compteurs de paires réinitialisés après bilan horaire.")
+        self._VICTORIES_DATA = {
+            "joueur": {"count": 0, "games": []},
+            "banquier": {"count": 0, "games": []},
+            "nul": {"count": 0, "games": []}
+        }
+        self._ODD_EVEN_DATA = {
+            "odd": {"count": 0, "games": []},
+            "even": {"count": 0, "games": []}
+        }
 
     # --- FONCTIONS D'ANALYSE 3K/2K ---
     
@@ -92,49 +182,82 @@ class CardCounter:
     # --- MISE À JOUR DU BILAN INSTANTANÉ (Message 1 - Prioritaire) ---
 
     def get_instant_bilan_text(self) -> str:
-        """Génère la SYNTHÈSE INSTANTANÉE (Joueur/Banquier/Paires) pour le rapport."""
+        """Génère la SYNTHÈSE INSTANTANÉE avec toutes les statistiques séparées et pourcentages."""
         total_pairs = sum(data["count"] for data in self._PAIR_DATA.values())
         
         if total_pairs == 0:
-            return "✨ **Instantané** | Stats Paires ✨\n━━━━━━━━━━━━━━━━━━━━\n📈 Total jeux analysés : **0**\n\nAucune donnée analysée pour le moment.\n━━━━━━━━━━━━━━━━━━━━"
+            return "✨ Statistiques Complètes ✨\n━━━━━━━━━━━━━━━━━━━━\n📈 Total jeux analysés : 0\n\nAucune donnée analysée pour le moment."
 
-        # Totaux Joueur
-        count_3k_joueur, count_2k_joueur = self.get_player_k_counts()
-        pct_3k_joueur = count_3k_joueur * 100 / total_pairs
-        pct_2k_joueur = count_2k_joueur * 100 / total_pairs
-        
-        # Totaux Banquier
-        count_3k_banker, count_2k_banker = self.get_banker_k_counts()
-        pct_3k_banker = count_3k_banker * 100 / total_pairs
-        pct_2k_banker = count_2k_banker * 100 / total_pairs
-        
         lines = [
-            "✨ Instantané | Stats Paires ✨",
-            "━━━━━━━━━━━━━━━━━━━━",
-            f"📈 Total jeux analysés : {total_pairs}",
-            "",
-            "👤 Analyse JOUEUR (X/Y)",
-            f"• 3K : {count_3k_joueur} ({pct_3k_joueur:.1f} %)", 
-            f"• 2K : {count_2k_joueur} ({pct_2k_joueur:.1f} %)",
-            "",
-            "🏦 Analyse BANQUIER (X/Y)",
-            f"• 3K : {count_3k_banker} ({pct_3k_banker:.1f} %)",
-            f"• 2K : {count_2k_banker} ({pct_2k_banker:.1f} %)",
-            "",
-            "* Détails des Paires *",
-            "━━━━━━━━━━━━━━━━━━━━"
+            "✨ STATISTIQUES COMPLÈTES ✨",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"📊 Total jeux analysés : {total_pairs}",
+            ""
         ]
+
+        # --- VICTOIRES JOUEUR/BANQUIER/NUL ---
+        joueur_wins = self._VICTORIES_DATA["joueur"]["count"]
+        banquier_wins = self._VICTORIES_DATA["banquier"]["count"]
+        nul_wins = self._VICTORIES_DATA["nul"]["count"]
         
-        # Détails par Paire
-        emojis = {"2/2": "🃏", "3/3": "🔥", "3/2": "💪", "2/3": "🍀"}
+        lines.append("🎯 VICTOIRES (Joueur/Banquier/Nul)")
+        lines.append("─────────────────────────────────")
+        joueur_pct = joueur_wins * 100 / total_pairs if total_pairs > 0 else 0
+        banquier_pct = banquier_wins * 100 / total_pairs if total_pairs > 0 else 0
+        nul_pct = nul_wins * 100 / total_pairs if total_pairs > 0 else 0
+        
+        lines.append(f"👤 Joueur   : {joueur_wins:3d} ({joueur_pct:6.2f}%)")
+        lines.append(f"🏦 Banquier : {banquier_wins:3d} ({banquier_pct:6.2f}%)")
+        lines.append(f"⚖️  Nul      : {nul_wins:3d} ({nul_pct:6.2f}%)")
+        lines.append("")
+
+        # --- PAIR / IMPAIR ---
+        odd_count = self._ODD_EVEN_DATA["odd"]["count"]
+        even_count = self._ODD_EVEN_DATA["even"]["count"]
+        
+        lines.append("🔄 PAIR / IMPAIR")
+        lines.append("─────────────────────────────────")
+        even_pct = even_count * 100 / total_pairs if total_pairs > 0 else 0
+        odd_pct = odd_count * 100 / total_pairs if total_pairs > 0 else 0
+        
+        lines.append(f"🔵 Pair   : {even_count:3d} ({even_pct:6.2f}%)")
+        lines.append(f"🔴 Impair : {odd_count:3d} ({odd_pct:6.2f}%)")
+        lines.append("")
+
+        # --- ANALYSE JOUEUR/BANQUIER (3K/2K) ---
+        count_3k_joueur, count_2k_joueur = self.get_player_k_counts()
+        pct_3k_joueur = count_3k_joueur * 100 / total_pairs if total_pairs > 0 else 0
+        pct_2k_joueur = count_2k_joueur * 100 / total_pairs if total_pairs > 0 else 0
+        
+        count_3k_banker, count_2k_banker = self.get_banker_k_counts()
+        pct_3k_banker = count_3k_banker * 100 / total_pairs if total_pairs > 0 else 0
+        pct_2k_banker = count_2k_banker * 100 / total_pairs if total_pairs > 0 else 0
+        
+        lines.append("👤 3K/2K JOUEUR")
+        lines.append("─────────────────────────────────")
+        lines.append(f"💪 3 Cartes (3K) : {count_3k_joueur:3d} ({pct_3k_joueur:6.2f}%)")
+        lines.append(f"💼 2 Cartes (2K) : {count_2k_joueur:3d} ({pct_2k_joueur:6.2f}%)")
+        lines.append("")
+        
+        lines.append("🏦 3K/2K BANQUIER")
+        lines.append("─────────────────────────────────")
+        lines.append(f"💪 3 Cartes (3K) : {count_3k_banker:3d} ({pct_3k_banker:6.2f}%)")
+        lines.append(f"💼 2 Cartes (2K) : {count_2k_banker:3d} ({pct_2k_banker:6.2f}%)")
+        lines.append("")
+        
+        lines.append("🃏 PAIRES (Détails)")
+        lines.append("─────────────────────────────────")
+        
+        emojis = {"2/2": "🎯", "3/3": "🔥", "3/2": "💪", "2/3": "🍀"}
         pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
             count = self._PAIR_DATA[key]["count"]
             pct = count * 100 / total_pairs if total_pairs > 0 else 0
-            lines.append(f"• {key} : {count} ({pct:.1f} %) {emojis.get(key, '')}")
+            emoji = emojis.get(key, '')
+            lines.append(f"{emoji} {key} : {count:3d} ({pct:6.2f}%)")
             
-        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         return "\n".join(lines)
 
 
@@ -162,7 +285,7 @@ class CardCounter:
         pair_keys = ["3/2", "3/3", "2/2", "2/3"]
         
         for key in pair_keys:
-            data = self._PAIR_DATA.get(key, {"count": 0})
+            data = self._PAIR_DATA.get(key, {"count": 0, "games": []})
             count = data["count"]
             pct = count * 100 / total_pairs if total_pairs > 0 else 0
             style = pair_data_style[key]
@@ -231,12 +354,11 @@ class CardCounter:
         return self._get_pairs_bilan_text().strip()
     
     def add(self, text: str):
-        """Ajoute un message au compteur (extrait le numéro de jeu et compte les paires)."""
-        game_number = None
-        match = re.search(r'#N(\d+)', text)
-        if match:
-            game_number = int(match.group(1))
+        """Ajoute un message au compteur (extrait les numéros de jeu et compte les paires)."""
+        game_number = self.extract_game_number(text)
         self.update_pair_counts(text, game_number)
+        self.update_victories(text, game_number)
+        self.update_odd_even(text, game_number)
     
     def build_report(self) -> str:
         """Construit un rapport instantané (synthèse rapide)."""
@@ -250,9 +372,9 @@ class CardCounter:
         """
         [ORDRE D'ENVOI FINAL]
         Génère un rapport complet et réinitialise les compteurs.
-        Ordre : 1. Synthèse (Joueur/Banquier), 2. Bilan Général, 3. Bilans Détaillés.
+        Ordre : 1. Synthèse (Victoires/Impair-Pair/Joueur/Banquier), 2. Bilan Général, 3. Bilans Détaillés.
         """
-        # 1. Générer le rapport INSTANTANÉ/SYNTHÈSE (Joueur/Banquier) - Message 1
+        # 1. Générer le rapport INSTANTANÉ/SYNTHÈSE - Message 1
         instant_bilan = self.get_instant_bilan_text()
         
         # 2. Générer le Bilan Général (Décoré) - Message 2
