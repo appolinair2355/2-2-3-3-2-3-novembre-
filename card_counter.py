@@ -195,6 +195,10 @@ class CardCounter:
             ""
         ]
 
+        def format_games(games_list):
+            if not games_list: return "Aucun"
+            return " ".join([f"#N{g}" for g in games_list])
+
         # --- VICTOIRES JOUEUR/BANQUIER/NUL ---
         joueur_wins = self._VICTORIES_DATA["joueur"]["count"]
         banquier_wins = self._VICTORIES_DATA["banquier"]["count"]
@@ -207,8 +211,11 @@ class CardCounter:
         nul_pct = nul_wins * 100 / total_pairs if total_pairs > 0 else 0
         
         lines.append(f"👤 Joueur   : {joueur_wins:3d} ({joueur_pct:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(self._VICTORIES_DATA['joueur']['games'])}")
         lines.append(f"🏦 Banquier : {banquier_wins:3d} ({banquier_pct:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(self._VICTORIES_DATA['banquier']['games'])}")
         lines.append(f"⚖️  Nul      : {nul_wins:3d} ({nul_pct:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(self._VICTORIES_DATA['nul']['games'])}")
         lines.append("")
 
         # --- PAIR / IMPAIR ---
@@ -221,7 +228,9 @@ class CardCounter:
         odd_pct = odd_count * 100 / total_pairs if total_pairs > 0 else 0
         
         lines.append(f"🔵 Pair   : {even_count:3d} ({even_pct:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(self._ODD_EVEN_DATA['even']['games'])}")
         lines.append(f"🔴 Impair : {odd_count:3d} ({odd_pct:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(self._ODD_EVEN_DATA['odd']['games'])}")
         lines.append("")
 
         # --- ANALYSE JOUEUR/BANQUIER (3K/2K) ---
@@ -229,20 +238,35 @@ class CardCounter:
         pct_3k_joueur = count_3k_joueur * 100 / total_pairs if total_pairs > 0 else 0
         pct_2k_joueur = count_2k_joueur * 100 / total_pairs if total_pairs > 0 else 0
         
+        # Liste pour 3K/2K (combinaison des paires)
+        games_3k_joueur = self._PAIR_DATA["3/2"]["games"] + self._PAIR_DATA["3/3"]["games"]
+        games_2k_joueur = self._PAIR_DATA["2/2"]["games"] + self._PAIR_DATA["2/3"]["games"]
+        games_3k_joueur.sort()
+        games_2k_joueur.sort()
+
+        lines.append("👤 3K/2K JOUEUR")
+        lines.append("─────────────────────────────────")
+        lines.append(f"💪 3 Cartes (3K) : {count_3k_joueur:3d} ({pct_3k_joueur:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(games_3k_joueur)}")
+        lines.append(f"💼 2 Cartes (2K) : {count_2k_joueur:3d} ({pct_2k_joueur:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(games_2k_joueur)}")
+        lines.append("")
+        
         count_3k_banker, count_2k_banker = self.get_banker_k_counts()
         pct_3k_banker = count_3k_banker * 100 / total_pairs if total_pairs > 0 else 0
         pct_2k_banker = count_2k_banker * 100 / total_pairs if total_pairs > 0 else 0
         
-        lines.append("👤 3K/2K JOUEUR")
-        lines.append("─────────────────────────────────")
-        lines.append(f"💪 3 Cartes (3K) : {count_3k_joueur:3d} ({pct_3k_joueur:6.2f}%)")
-        lines.append(f"💼 2 Cartes (2K) : {count_2k_joueur:3d} ({pct_2k_joueur:6.2f}%)")
-        lines.append("")
-        
+        games_3k_banker = self._PAIR_DATA["2/3"]["games"] + self._PAIR_DATA["3/3"]["games"]
+        games_2k_banker = self._PAIR_DATA["2/2"]["games"] + self._PAIR_DATA["3/2"]["games"]
+        games_3k_banker.sort()
+        games_2k_banker.sort()
+
         lines.append("🏦 3K/2K BANQUIER")
         lines.append("─────────────────────────────────")
         lines.append(f"💪 3 Cartes (3K) : {count_3k_banker:3d} ({pct_3k_banker:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(games_3k_banker)}")
         lines.append(f"💼 2 Cartes (2K) : {count_2k_banker:3d} ({pct_2k_banker:6.2f}%)")
+        lines.append(f"└─ Liste: {format_games(games_2k_banker)}")
         lines.append("")
         
         lines.append("🃏 PAIRES (Détails)")
@@ -256,6 +280,7 @@ class CardCounter:
             pct = count * 100 / total_pairs if total_pairs > 0 else 0
             emoji = emojis.get(key, '')
             lines.append(f"{emoji} {key} : {count:3d} ({pct:6.2f}%)")
+            lines.append(f"└─ Liste: {format_games(self._PAIR_DATA[key]['games'])}")
             
         lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         return "\n".join(lines)
