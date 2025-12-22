@@ -1,4 +1,8 @@
-import os, asyncio, json, re, time
+import os
+import asyncio
+import json
+import re
+import time
 from datetime import datetime, timedelta
 from telethon import TelegramClient, events
 from dotenv import load_dotenv
@@ -10,31 +14,31 @@ import config
 
 load_dotenv()
 
-API_ID   = int(os.getenv("API_ID") or 0)
+API_ID = int(os.getenv("API_ID") or 0)
 API_HASH = os.getenv("API_HASH") or ""
-BOT_TOKEN= os.getenv("BOT_TOKEN") or ""
+BOT_TOKEN = os.getenv("BOT_TOKEN") or ""
 ADMIN_ID = int(os.getenv("ADMIN_ID") or 0)
-PORT     = int(os.getenv('PORT', 5000))
+PORT = int(os.getenv('PORT', 5000))
 
-detected_stat_channel  = config.STAT_CHANNEL_ID
+detected_stat_channel = config.STAT_CHANNEL_ID
 detected_display_channel = config.DISPLAY_CHANNEL_ID
-CONFIG_FILE   = "bot_config.json"
+CONFIG_FILE = "bot_config.json"
 INTERVAL_FILE = "interval.json"
 AUTO_BILAN_MIN = 30
-AUTO_TASK      = None
+AUTO_TASK = None
 
 pending_messages = {}
 database = init_database()
-predictor    = CardPredictor()
+predictor = CardPredictor()
 card_counter = CardCounter()
-client       = TelegramClient(f"bot_session_{int(time.time())}", API_ID, API_HASH)
+client = TelegramClient(f"bot_session_{int(time.time())}", API_ID, API_HASH)
 
 def load_config():
     global detected_stat_channel, detected_display_channel
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as f:
             c = json.load(f)
-            detected_stat_channel  = c.get("stat_channel")
+            detected_stat_channel = c.get("stat_channel")
             detected_display_channel = c.get("display_channel", detected_display_channel)
 
 def save_config():
@@ -53,19 +57,30 @@ def save_interval(mins: int):
 
 async def auto_bilan_loop():
     while True:
-        now = datetime.now()
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        sleep_seconds = (next_hour - now).total_seconds()
-        await asyncio.sleep(sleep_seconds)
-        if detected_display_channel:
-            msg = card_counter.report_and_reset()
-            await client.send_message(detected_display_channel, msg)
-            print(f"📊 Bilan horaire envoyé à {next_hour.strftime('%H:%M')}")
+        try:
+            now = datetime.now()
+            next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            sleep_seconds = (next_hour - now).total_seconds()
+            print(f"⏳ Prochain bilan à {next_hour.strftime('%H:%M')} (dans {int(sleep_seconds)} s)")
+            await asyncio.sleep(sleep_seconds)
+
+            if detected_display_channel:
+                msg = card_counter.report_and_reset()
+                await client.send_message(detected_display_channel, msg)
+                print(f"✅ Bilan horaire envoyé à {next_hour.strftime('%H:%M')}")
+            else:
+                print("⚠️ Canal d’affichage non configuré – bilan non envoyé")
+        except Exception as ex:
+            print(f"❌ Erreur dans auto_bilan_loop : {ex}")
+            await asyncio.sleep(60)
 
 def restart_auto_bilan():
     global AUTO_TASK
-    if AUTO_TASK: AUTO_TASK.cancel()
+    if AUTO_TASK:
+        AUTO_TASK.cancel()
+        print("🛑 Ancienne tâche auto_bilan_loop arrêtée")
     AUTO_TASK = asyncio.create_task(auto_bilan_loop())
+    print("✅ Nouvelle tâche auto_bilan_loop créée")
 
 @client.on(events.NewMessage(pattern="/start"))
 async def start(e):
@@ -73,13 +88,15 @@ async def start(e):
 
 @client.on(events.NewMessage(pattern="/status"))
 async def status(e):
-    if e.sender_id != ADMIN_ID: return
+    if e.sender_id != ADMIN_ID:
+        return
     load_config()
     await e.respond(f"Stat canal : {detected_stat_channel}\nAffichage canal : {detected_display_channel}\nIntervalle : {AUTO_BILAN_MIN} min")
 
 @client.on(events.NewMessage(pattern=r"/set_stat (-?\d+)"))
 async def set_stat(e):
-    if e.sender_id != ADMIN_ID or e.is_group: return
+    if e.sender_id != ADMIN_ID or e.is_group:
+        return
     global detected_stat_channel
     detected_stat_channel = int(e.pattern_match.group(1))
     save_config()
@@ -87,7 +104,8 @@ async def set_stat(e):
 
 @client.on(events.NewMessage(pattern=r"/set_display (-?\d+)"))
 async def set_display(e):
-    if e.sender_id != ADMIN_ID or e.is_group: return
+    if e.sender_id != ADMIN_ID or e.is_group:
+        return
     global detected_display_channel
     channel_id = int(e.pattern_match.group(1))
     if channel_id > 0 and channel_id > 1000000000:
@@ -98,7 +116,8 @@ async def set_display(e):
 
 @client.on(events.NewMessage(pattern=r"/intervalle"))
 async def set_interval(e):
-    if e.sender_id != ADMIN_ID: return
+    if e.sender_id != ADMIN_ID:
+        return
     try:
         mins = int(e.message.message.split()[1])
         mins = max(1, min(mins, 120))
@@ -108,160 +127,27 @@ async def set_interval(e):
     save_interval(mins)
     global AUTO_BILAN_MIN
     AUTO_BILAN_MIN = mins
-    print(f"🔍 detected_display_channel = {detected_display_channel}")
-print("🚀 Lancement de restart_auto_bilan()")
     restart_auto_bilan()
-def restart_auto_bilan():
-    global AUTO_TASK
-    if AUTO_TASK:
-        AUTO_TASK.cancel()
-        print("🛑 Ancienne tâche auto_bilan_loop arrêtée")
-    AUTO_TASK = asyncio.create_task(auto_bilan_loop())
-    print("✅ Nouvelle tâche auto_bilan_loop créée")
-    
     await e.respond(f"✅ Bilan automatique toutes les {mins} min")
 
 @client.on(events.NewMessage(pattern="/bilan"))
 async def bilan(e):
-    if e.sender_id != ADMIN_ID: return
+    if e.sender_id != ADMIN_ID:
+        return
     msg = card_counter.report_and_reset()
     await e.respond(msg)
 
 @client.on(events.NewMessage(pattern="/reset"))
 async def reset(e):
-    if e.sender_id != ADMIN_ID: return
+    if e.sender_id != ADMIN_ID:
+        return
     card_counter.reset()
     await e.respond("✅ Compteur remis à zéro.")
 
-@client.on(events.NewMessage(pattern="/deploy"))
-async def deploy(e):
-    if e.sender_id != ADMIN_ID: return
-    import zipfile
-    zip_name = "joueu2.zip"
-    try:
-        with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as z:
-            main_render_content = open("main.py", "r", encoding="utf-8").read()
-            main_render_content = main_render_content.replace(
-                "PORT     = int(os.getenv('PORT', 10000'))",
-                "PORT     = int(os.getenv('PORT', 10000'))"
-            )
-            z.writestr("main.py", main_render_content)
-            for f in ["predictor.py", "yaml_manager.py", "card_counter.py", "scheduler.py", "config.py"]:
-                if os.path.exists(f):
-                    z.write(f)
-            z.writestr("runtime.txt", "python-3.11.10")
-            z.writestr("requirements.txt", """telethon==1.35.0
-aiohttp==3.9.5
-PyYAML==6.0.1
-python-dotenv==1.0.1
-""")
-            z.writestr("render.yaml", """services:
-  - type: web
-    name: telegram-card-counter-bot
-    env: python
-    runtime: python-3.11.10
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    envVars:
-      - key: PORT
-        value: 10000
-      - key: API_ID
-        sync: false
-      - key: API_HASH
-        sync: false
-      - key: BOT_TOKEN
-        sync: false
-      - key: ADMIN_ID
-        sync: false
-      - key: DISPLAY_CHANNEL
-        sync: false
-""")
-            z.writestr(".env.example", """API_ID=your_api_id
-API_HASH=your_api_hash
-BOT_TOKEN=your_bot_token
-ADMIN_ID=your_admin_id
-DISPLAY_CHANNEL=-1003216148681
-PORT=10000
-""")
-            z.writestr(".gitignore", """*.session
-*.session-journal
-.env
-__pycache__/
-*.py[cod]
-*.json
-*.yaml
-*.yml
-.vscode/
-.idea/
-*.log
-.DS_Store
-Thumbs.db
-""")
-            z.writestr("README.md", "README complet ici")
-        await e.respond("📦 joueu2.zip créé avec succès!")
-        await client.send_file(e.chat_id, zip_name, caption="🚀 joueu2.zip - Déploiement complet")
-    except Exception as ex:
-        await e.respond(f"❌ Erreur: {ex}")
-
-@client.on(events.NewMessage(pattern="/dep"))
-async def dep_render(e):
-    if e.sender_id != ADMIN_ID: return
-    import zipfile
-    zip_name = "render10k.zip"
-    try:
-        with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as z:
-            main_render_content = open("main.py", "r", encoding="utf-8").read()
-            main_render_content = main_render_content.replace(
-                "PORT     = int(os.getenv('PORT', 10000'))",
-                "PORT     = int(os.getenv('PORT', 10000'))"
-            )
-            z.writestr("main.py", main_render_content)
-            for f in ["predictor.py", "yaml_manager.py", "card_counter.py", "scheduler.py"]:
-                if os.path.exists(f):
-                    z.write(f)
-            z.writestr("runtime.txt", "python-3.11.10")
-            z.writestr("requirements.txt", """telethon==1.35.0
-aiohttp==3.9.5
-PyYAML==6.0.1
-python-dotenv==1.0.1
-""")
-            z.writestr("render.yaml", """services:
-  - type: web
-    name: telegram-card-counter-bot
-    env: python
-    runtime: python-3.11.10
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
-    envVars:
-      - key: PORT
-        value: 10000
-      - key: API_ID
-        sync: false
-      - key: API_HASH
-        sync: false
-      - key: BOT_TOKEN
-        sync: false
-      - key: ADMIN_ID
-        sync: false
-      - key: DISPLAY_CHANNEL
-        sync: false
-""")
-            z.writestr(".env.example", """API_ID=your_api_id
-API_HASH=your_api_hash
-BOT_TOKEN=your_bot_token
-ADMIN_ID=your_admin_id
-DISPLAY_CHANNEL=0
-PORT=10000
-""")
-            z.writestr("README_RENDER.md", "README complet ici")
-        await e.respond("📦 render10k.zip créé avec succès!")
-        await client.send_file(e.chat_id, zip_name, caption="🚀 render10k.zip - Render.com (Python 3.11 + Port 10000)")
-    except Exception as ex:
-        await e.respond(f"❌ Erreur: {ex}")
-
 @client.on(events.NewMessage())
 async def handle_new(e):
-    if e.chat_id != detected_stat_channel: return
+    if e.chat_id != detected_stat_channel:
+        return
     txt = e.message.message or ""
     if "⏰" in txt or "🕐" in txt:
         pending_messages[e.message.id] = txt
@@ -274,7 +160,8 @@ async def handle_new(e):
 
 @client.on(events.MessageEdited())
 async def handle_edited(e):
-    if e.chat_id != detected_stat_channel: return
+    if e.chat_id != detected_stat_channel:
+        return
     txt = e.message.message or ""
     if e.message.id in pending_messages:
         if "⏰" not in txt and "🕐" not in txt:
@@ -299,17 +186,12 @@ async def process_finalized_message(txt: str, chat_id: int):
     if detected_display_channel:
         try:
             await client.send_message(int(detected_display_channel), instant)
-            print(f"📈 Instantané envoyé au canal : {instant}")
+            print(f"📈 Instantané envoyé au canal : {instant[:50]}...")
         except Exception as ex:
             print(f"❌ Erreur envoi instantané : {ex}")
-            try:
-                await client.get_entity(int(detected_display_channel))
-                await client.send_message(detected_display_channel, instant)
-                print(f"✅ Instantané envoyé (via entité) : {instant}")
-            except Exception as ex2:
-                print(f"❌ Échec total envoi : {ex2}")
 
-async def health(request): return web.Response(text="Bot OK")
+async def health(request):
+    return web.Response(text="Bot OK")
 
 async def create_web():
     app = web.Application()
@@ -334,6 +216,8 @@ async def main():
             print(f"✅ Canal d'affichage trouvé : {entity.title} (ID: {detected_display_channel})")
         except Exception as ex:
             print(f"⚠️ Impossible d'accéder au canal d'affichage {detected_display_channel}: {ex}")
+    print(f"🔍 detected_display_channel = {detected_display_channel}")
+    print("🚀 Lancement de restart_auto_bilan()")
     restart_auto_bilan()
     me = await client.get_me()
     print(f"Bot connecté : @{me.username}")
@@ -342,4 +226,3 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
-
