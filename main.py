@@ -108,7 +108,17 @@ async def set_interval(e):
     save_interval(mins)
     global AUTO_BILAN_MIN
     AUTO_BILAN_MIN = mins
+    print(f"🔍 detected_display_channel = {detected_display_channel}")
+print("🚀 Lancement de restart_auto_bilan()")
     restart_auto_bilan()
+def restart_auto_bilan():
+    global AUTO_TASK
+    if AUTO_TASK:
+        AUTO_TASK.cancel()
+        print("🛑 Ancienne tâche auto_bilan_loop arrêtée")
+    AUTO_TASK = asyncio.create_task(auto_bilan_loop())
+    print("✅ Nouvelle tâche auto_bilan_loop créée")
+    
     await e.respond(f"✅ Bilan automatique toutes les {mins} min")
 
 @client.on(events.NewMessage(pattern="/bilan"))
