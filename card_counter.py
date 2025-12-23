@@ -257,6 +257,71 @@ class CardCounter:
             emoji = emojis.get(key, '')
             lines.append(f"{emoji} {key} : {count:3d} ({pct:6.2f}%)")
             
+        lines.append("")
+        lines.append("🎰 Liste des numéros - VICTOIRE JOUEUR (Chronologique)")
+        lines.append("─────────────────────────────────")
+        joueur_games = self._VICTORIES_DATA["joueur"]["games"]
+        if joueur_games:
+            games_with_prefix = [f"**#N{g}**" for g in joueur_games]
+            lines_joueur = []
+            for i in range(0, len(games_with_prefix), 10):
+                lines_joueur.append(" ".join(games_with_prefix[i:i + 10]))
+            lines.append("\n".join(lines_joueur))
+        else:
+            lines.append("Aucune victoire joueur enregistrée")
+        
+        lines.append("")
+        lines.append("🎰 Liste des numéros - VICTOIRE BANQUIER (Chronologique)")
+        lines.append("─────────────────────────────────")
+        banquier_games = self._VICTORIES_DATA["banquier"]["games"]
+        if banquier_games:
+            games_with_prefix = [f"**#N{g}**" for g in banquier_games]
+            lines_banquier = []
+            for i in range(0, len(games_with_prefix), 10):
+                lines_banquier.append(" ".join(games_with_prefix[i:i + 10]))
+            lines.append("\n".join(lines_banquier))
+        else:
+            lines.append("Aucune victoire banquier enregistrée")
+        
+        lines.append("")
+        lines.append("🎰 Liste des numéros - MATCH NUL (Chronologique)")
+        lines.append("─────────────────────────────────")
+        nul_games = self._VICTORIES_DATA["nul"]["games"]
+        if nul_games:
+            games_with_prefix = [f"**#N{g}**" for g in nul_games]
+            lines_nul = []
+            for i in range(0, len(games_with_prefix), 10):
+                lines_nul.append(" ".join(games_with_prefix[i:i + 10]))
+            lines.append("\n".join(lines_nul))
+        else:
+            lines.append("Aucun match nul enregistré")
+        
+        lines.append("")
+        lines.append("🎰 Liste des numéros - IMPAIR (Chronologique)")
+        lines.append("─────────────────────────────────")
+        odd_games = self._ODD_EVEN_DATA["odd"]["games"]
+        if odd_games:
+            games_with_prefix = [f"**#N{g}**" for g in odd_games]
+            lines_odd = []
+            for i in range(0, len(games_with_prefix), 10):
+                lines_odd.append(" ".join(games_with_prefix[i:i + 10]))
+            lines.append("\n".join(lines_odd))
+        else:
+            lines.append("Aucun numéro impair enregistré")
+        
+        lines.append("")
+        lines.append("🎰 Liste des numéros - PAIR (Chronologique)")
+        lines.append("─────────────────────────────────")
+        even_games = self._ODD_EVEN_DATA["even"]["games"]
+        if even_games:
+            games_with_prefix = [f"**#N{g}**" for g in even_games]
+            lines_even = []
+            for i in range(0, len(games_with_prefix), 10):
+                lines_even.append(" ".join(games_with_prefix[i:i + 10]))
+            lines.append("\n".join(lines_even))
+        else:
+            lines.append("Aucun numéro pair enregistré")
+            
         lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         return "\n".join(lines)
 
