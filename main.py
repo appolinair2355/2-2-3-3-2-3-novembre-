@@ -140,7 +140,7 @@ async def reset(e):
 async def deploy(e):
     if e.sender_id != ADMIN_ID: return
     import zipfile
-    zip_name = "joueu2.zip"
+    zip_name = "hj.zip"
 
     try:
         with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as z:
@@ -403,8 +403,8 @@ Le bot doit être:
 """
             z.writestr("README.md", readme)
 
-        await e.respond("📦 joueu2.zip créé avec succès!\n✅ Port 10000 Replit\n✅ Python 3.11.10\n✅ Compte le 1er groupe uniquement\n✅ Canal: -1002674389383\n✅ Tous fichiers optimisés")
-        await client.send_file(e.chat_id, zip_name, caption="🚀 joueu2.zip - Déploiement complet (1er groupe)")
+        await e.respond("📦 hj.zip créé avec succès!\n✅ Port 5000 Replit\n✅ Python 3.11.10\n✅ Bilan complet avec listes numéros (Joueur/Banquier/Nul/Impair/Pair)\n✅ Canal: -1002674389383\n✅ Tous fichiers optimisés")
+        await client.send_file(e.chat_id, zip_name, caption="🚀 hj.zip - Déploiement avec bilans complets")
 
     except Exception as ex:
         await e.respond(f"❌ Erreur: {ex}")
